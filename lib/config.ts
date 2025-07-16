@@ -1,4 +1,3 @@
-const EXTERNAL_IP = "34.94.185.123";
 
 export const MIND_MAP_PATH = `/api/mindmap/`;
 export const FLASK_JOB_SUBMIT       = `/api/submit-job`;

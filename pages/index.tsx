@@ -95,7 +95,7 @@ export default function Home() {
   };
 
   return (
-    <div className="bg-black text-white min-h-screen flex flex-col items-center justify-center">
+    <div className="bg-black text-white min-h-screen flex flex-col items-start justify-start">
       <header className="w-full bg-gray-900 py-4 text-center aphasia-style">
         <h1 className="text-4xl font-bold">Video Summarizer</h1>
         <div className="mt-2">
@@ -115,11 +115,11 @@ export default function Home() {
         </div>
       </header>
 
-      <main className="aphasia-style flex flex-col items-center p-4 space-y-4 w-full max-w-[1400px]">
+      <main className="aphasia-style flex flex-col items-start p-4 space-y-4 w-full">
         {videoURL && (
-          <div className="flex flex-col lg:flex-row w-full space-y-4 lg:space-y-0 lg:space-x-4">
+          <div className="flex flex-col lg:flex-row w-full justify-between space-y-4 lg:space-y-0">
             {/* Video Section */}
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col flex-grow items-start">
               <div
                 className="bg-black rounded-lg overflow-hidden"
                 style={{
@@ -147,7 +147,7 @@ export default function Home() {
               </div>
               {summaries.length > 0 && (
                 <div>
-                  <div className="mt-6 w-[1080px] max-w-full p-6 bg-gray-800 rounded-lg">
+                  <div className="mt-6 w-full p-6 bg-gray-800 rounded-lg">
                     <h2 className="text-2xl font-semibold aphasia-style mb-2">
                       Summary
                     </h2>
@@ -167,7 +167,7 @@ export default function Home() {
                     )}
                   </div>
                   {summaries[summaries.length - 1].mindmapJson && (
-                    <div className="mt-6 w-[1080px] max-w-full p-6 bg-gray-800 rounded-lg">
+                    <div className="mt-6  w-full p-6 bg-gray-800 rounded-lg">
                       <h2 className="text-2xl font-semibold aphasia-style mb-2">
                         Mind Map
                       </h2>
@@ -179,27 +179,29 @@ export default function Home() {
             </div>
 
             {/* Sidebar */}
-            <aside className="w-full lg:w-80 flex-shrink-0 space-y-4">
-              <h2 className="text-xl font-semibold aphasia-style mb-2">
-                Summarized Video
-              </h2>
-              {summaries.map(s => (
-                <div
-                  key={s.id}
-                  className="flex items-center space-x-2 bg-gray-800 p-2 rounded"
-                >
-                  <img
-                    src={s.thumbnail}
-                    alt={s.title}
-                    className="w-16 h-10 object-cover rounded"
-                  />
-                  <div>
-                    <p className="text-sm aphasia-style">{s.title}</p>
-                    <p className="text-xs aphasia-style mt-1 text-green-400">Summarized</p>
+            <div className="flex-none lg:w-80">
+              <aside className="space-y-4">
+                <h2 className="text-xl font-semibold aphasia-style mb-2">
+                  Summarized Video
+                </h2>
+                {summaries.map(s => (
+                  <div
+                    key={s.id}
+                    className="flex items-center space-x-2 bg-gray-800 p-2 rounded"
+                  >
+                    <img
+                      src={s.thumbnail}
+                      alt={s.title}
+                      className="w-16 h-10 object-cover rounded"
+                    />
+                    <div>
+                      <p className="text-sm aphasia-style">{s.title}</p>
+                      <p className="text-xs aphasia-style mt-1 text-green-400">Summarized</p>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </aside>
+                ))}
+              </aside>
+            </div>
           </div>
         )}
       </main>
