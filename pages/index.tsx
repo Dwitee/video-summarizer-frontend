@@ -35,11 +35,11 @@ export default function Home() {
   }, [summaries]);
 
   useEffect(() => {
+    const nodes: Array<{ id: string; label: string; shape: string; color: string }> = [];
+    const edges: Array<{ from: string; to: string; arrows: string }> = [];
     const last = summaries[summaries.length - 1];
     if (last?.mindmapJson && visRef.current) {
       console.log('[DEBUG] rendering mindmap:', last.mindmapJson);
-      const nodes = [];
-      const edges = [];
       // central node
       nodes.push({
         id: 'central',
