@@ -19,7 +19,7 @@ export async function extractAudio(file: File, filename: string): Promise<Blob> 
   console.log('[DEBUG] extractAudio: cleaning up FFmpeg FS');
   ffmpeg.FS('unlink', filename);
   ffmpeg.FS('unlink', 'out.mp3');
-  const blob = new Blob([data.buffer], { type: 'audio/mp3' });
+  const blob = new Blob([data], { type: 'audio/mp3' });
   console.log(`[DEBUG] extractAudio: returning Blob of size ${blob.size}`);
   return blob;
 }
