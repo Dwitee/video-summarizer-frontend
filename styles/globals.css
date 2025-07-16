@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  @apply bg-black text-white;
+  margin: 0;
+  padding: 0;
+  font-family: Arial, Calibri, sans-serif;
+  font-size: 18px;      /* Between 14pt (18.7px) and 18pt (24px) */
+  line-height: 1.6;     /* Ample line spacing */
+}
+
+/* Aphasia-friendly spacing and sizing */
+p, li, h1, h2, h3, label {
+  margin: 1em 0;        /* Plenty of space around text */
+}
+
+input, button {
+  font-size: 18px;      /* Ensure controls match text size */
+  padding: 0.5em 1em;   /* Space inside buttons/inputs */
+  margin: 0.5em 0;      /* Space around controls */
+}
+
+/* Aphasia Style */
+.aphasia-style {
+  font-family: Arial, Calibri, sans-serif;
+  font-size: 18px;      /* Equivalent to 14–18pt */
+  line-height: 1.6;     /* Ample line spacing */
+}
