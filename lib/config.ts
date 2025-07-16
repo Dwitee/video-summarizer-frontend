@@ -1,5 +1,5 @@
 const EXTERNAL_IP = "34.94.185.123";
-const BASE_URL = `http://${EXTERNAL_IP}:8080`;
+const BASE_URL = `https://${EXTERNAL_IP}:8080`;
 
 export const FLASK_BACKEND_UPLOAD = `${BASE_URL}/summarize-upload`;
 export const FLASK_JOB_SUBMIT = `${BASE_URL}/submit-job`;
