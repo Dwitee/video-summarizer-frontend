@@ -16,10 +16,18 @@ async function submitAudioJob(
   filename: string,
   modelType: ModelType = ModelType.T5Small
 ): Promise<string> {
+  console.log('[DEBUG] submitAudioJob: URL=', FLASK_JOB_SUBMIT, 'filename=', filename, 'modelType=', modelType);
   const form = new FormData();
   form.append('file', audio, filename);
   form.append('model_name', modelType);
-  const res = await fetch(FLASK_JOB_SUBMIT, { method: 'POST', body: form });
+  let res: Response;
+  try {
+    res = await fetch(FLASK_JOB_SUBMIT, { method: 'POST', body: form });
+    console.log('[DEBUG] submitAudioJob: HTTP status', res.status);
+  } catch (networkError) {
+    console.error('[DEBUG] submitAudioJob: network error', networkError);
+    throw networkError;
+  }
   if (!res.ok) throw new Error(`Submit job failed: ${res.status}`);
   const json = await res.json();
   return json.job_id;
@@ -30,7 +38,9 @@ async function pollJobResult(jobId: string, maxWait = 600000, interval = 10000):
   const start = Date.now();
   while (Date.now() - start < maxWait) {
     await new Promise(r => setTimeout(r, interval));
+    console.log('[DEBUG] pollJobResult: polling URL=', `${FLASK_JOB_RESULT}${jobId}`);
     const res = await fetch(`${FLASK_JOB_RESULT}${jobId}`);
+    console.log('[DEBUG] pollJobResult: status', res.status);
     if (!res.ok) throw new Error(`Poll job failed: ${res.status}`);
     const json = await res.json();
     if (json.summary) return json.summary;
@@ -68,9 +78,11 @@ export function useVideoSummarizer() {
 
     const audio = await extractAudio(file, title);
     try {
+      console.log('[DEBUG] summarize: submitting job for id', id);
       console.log('[DEBUG] useVideoSummarizer: submitting audio job');
       const jobId = await submitAudioJob(audio, `${title}.mp3`, modelType); //TODO: lets take this model from ui
       console.log('[DEBUG] useVideoSummarizer: job ID', jobId);
+      console.log('[DEBUG] summarize: polling result for job', jobId);
       const raw = await pollJobResult(jobId);
       console.log('[DEBUG] useVideoSummarizer: received summary', raw);
       // Format based on modelType
@@ -92,6 +104,7 @@ export function useVideoSummarizer() {
           );
           // Generate mind map from summaryTextString
           try {
+            console.log('[DEBUG] summarize: generating mindmap for id', id);
             const mindmap = await generateMindmapFromSummary(summaryTextString, modelType);
             setSummaries(prev =>
               prev.map(e =>
@@ -110,6 +123,7 @@ export function useVideoSummarizer() {
           );
           // Generate mind map from error-formatted summary text
           try {
+            console.log('[DEBUG] summarize: generating mindmap for id', id);
             const mindmap = await generateMindmapFromSummary(formatted, modelType);
             setSummaries(prev =>
               prev.map(e =>
@@ -132,6 +146,7 @@ export function useVideoSummarizer() {
         );
         // Generate mind map from formatted summary text
         try {
+          console.log('[DEBUG] summarize: generating mindmap for id', id);
           const mindmap = await generateMindmapFromSummary(formatted, modelType);
           setSummaries(prev =>
             prev.map(e =>
