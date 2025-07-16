@@ -205,6 +205,10 @@ export default function Home() {
           </div>
         )}
       </main>
+      {/* Footer */}
+      <footer className="w-full py-4 text-center aphasia-style text-sm bg-gray-900">
+        © Dwitee Krishna Panda [MIT license]
+      </footer>
     </div>
   );
 }
