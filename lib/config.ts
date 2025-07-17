@@ -5,3 +5,6 @@ export const FLASK_JOB_RESULT       = `/api/job-result/`;
 export const FLASK_BACKEND_UPLOAD   = `/api/summarize-upload`;
 export const FLASK_BACKEND_GENERATE_MINDMAP = `/api/generate-mindmap`;
 export const FLASK_BACKEND_UPLOAD_MINDMAP  = `/api/upload-mindmap`;
+
+export const FLASK_BACKEND_SAVE_SUMMARY   = `/api/save-summary`;
+export const FLASK_BACKEND_LIST_SUMMARIES = `/api/list-summaries`;

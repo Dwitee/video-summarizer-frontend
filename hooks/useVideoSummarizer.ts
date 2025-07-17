@@ -1,8 +1,9 @@
 // hooks/useVideoSummarizer.ts
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { extractAudio, captureThumbnail, generateMindmapFromSummary } from '../lib/summarizer';
 import { v4 as uuidv4 } from 'uuid';
 import { FLASK_JOB_SUBMIT, FLASK_JOB_RESULT } from '../lib/config';
+import { FLASK_BACKEND_SAVE_SUMMARY, FLASK_BACKEND_LIST_SUMMARIES } from '../lib/config';
 
 // Supported model types for summarization
 export enum ModelType {
@@ -63,6 +64,21 @@ export function useVideoSummarizer() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [summaries, setSummaries] = useState<SummaryEntry[]>([]);
 
+  // On hook initialization, fetch any previously saved summaries
+  useEffect(() => {
+    (async () => {
+      try {
+        console.log('[DEBUG] loadSummaries: fetching saved entries');
+        const res = await fetch(FLASK_BACKEND_LIST_SUMMARIES);
+        const saved: SummaryEntry[] = await res.json();
+        console.log('[DEBUG] loadSummaries: received', saved);
+        setSummaries(saved);
+      } catch (e) {
+        console.error('[DEBUG] loadSummaries error:', e);
+      }
+    })();
+  }, []);
+
   const summarize = async (
     file: File,
     title: string,
@@ -75,6 +91,18 @@ export function useVideoSummarizer() {
       ...prev,
       { id, title, thumbnail, summaryText: 'Generating...' }
     ]);
+
+    // Persist the placeholder entry
+    try {
+      console.log('[DEBUG] saveSummary: saving placeholder for id', id);
+      await fetch(FLASK_BACKEND_SAVE_SUMMARY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, title, thumbnail })
+      });
+    } catch (e) {
+      console.error('[DEBUG] saveSummary placeholder error:', e);
+    }
 
     const audio = await extractAudio(file, title);
     try {
@@ -114,6 +142,20 @@ export function useVideoSummarizer() {
           } catch (e) {
             console.error('[DEBUG] generateMindmapFromSummary error:', e);
           }
+          // Persist the completed entry
+          const entry = summaries.find(e => e.id === id);
+          if (entry) {
+            try {
+              console.log('[DEBUG] saveSummary: saving completed entry for id', id);
+              await fetch(FLASK_BACKEND_SAVE_SUMMARY, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entry)
+              });
+            } catch (e) {
+              console.error('[DEBUG] saveSummary completed error:', e);
+            }
+          }
         } catch (e: any) {
           formatted = `Error parsing Gemini summary: ${e.message}`;
           setSummaries(prev =>
@@ -132,6 +174,20 @@ export function useVideoSummarizer() {
             );
           } catch (err) {
             console.error('[DEBUG] generateMindmapFromSummary error:', err);
+          }
+          // Persist the completed entry
+          const entry = summaries.find(e => e.id === id);
+          if (entry) {
+            try {
+              console.log('[DEBUG] saveSummary: saving completed entry for id', id);
+              await fetch(FLASK_BACKEND_SAVE_SUMMARY, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(entry)
+              });
+            } catch (e) {
+              console.error('[DEBUG] saveSummary completed error:', e);
+            }
           }
         }
       } else {
@@ -155,6 +211,20 @@ export function useVideoSummarizer() {
           );
         } catch (e) {
           console.error('[DEBUG] generateMindmapFromSummary error:', e);
+        }
+        // Persist the completed entry
+        const entry = summaries.find(e => e.id === id);
+        if (entry) {
+          try {
+            console.log('[DEBUG] saveSummary: saving completed entry for id', id);
+            await fetch(FLASK_BACKEND_SAVE_SUMMARY, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(entry)
+            });
+          } catch (e) {
+            console.error('[DEBUG] saveSummary completed error:', e);
+          }
         }
       }
     } catch (err) {
