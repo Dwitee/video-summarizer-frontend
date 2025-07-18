@@ -70,7 +70,19 @@ export function useVideoSummarizer() {
       try {
         console.log('[DEBUG] loadSummaries: fetching saved entries');
         const res = await fetch(FLASK_BACKEND_LIST_SUMMARIES);
-        const saved: SummaryEntry[] = await res.json();
+        const text = await res.text();
+        if (!res.ok) {
+          console.error('[DEBUG] loadSummaries error status:', res.status, text);
+          setSummaries([]);
+          return;
+        }
+        let saved: SummaryEntry[];
+        try {
+          saved = JSON.parse(text) as SummaryEntry[];
+        } catch (jsonErr) {
+          console.error('[DEBUG] loadSummaries: invalid JSON', text, jsonErr);
+          saved = [];
+        }
         console.log('[DEBUG] loadSummaries: received', saved);
         setSummaries(saved);
       } catch (e) {
