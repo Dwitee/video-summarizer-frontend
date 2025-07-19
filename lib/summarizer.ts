@@ -1,28 +1,11 @@
 // lib/summarizer.ts
 import { createFFmpeg, fetchFile } from '@ffmpeg/ffmpeg';
-import { FLASK_BACKEND_UPLOAD, FLASK_BACKEND_GENERATE_MINDMAP } from './config';
-
-const ffmpeg = createFFmpeg({ log: true, corePath: 'https://unpkg.com/@ffmpeg/core@0.10.0/dist/ffmpeg-core.js' });
-
-export async function extractAudio(file: File, filename: string): Promise<Blob> {
-  console.log(`[DEBUG] extractAudio: starting audio extraction for file "${filename}"`);
-  console.log(`[DEBUG] extractAudio: ffmpeg.isLoaded = ${ffmpeg.isLoaded()}`);
-  if (!ffmpeg.isLoaded()) await ffmpeg.load();
-  console.log('[DEBUG] extractAudio: ffmpeg loaded');
-  console.log(`[DEBUG] extractAudio: writing "${filename}" to FFmpeg FS`);
-  await ffmpeg.FS('writeFile', filename, await fetchFile(file));
-  console.log('[DEBUG] extractAudio: running ffmpeg command to extract audio');
-  await ffmpeg.run('-i', filename, '-vn', '-ac', '1', '-ar', '16000', '-b:a', '64k', 'out.mp3');
-  console.log('[DEBUG] extractAudio: ffmpeg.run completed');
-  const data = ffmpeg.FS('readFile', 'out.mp3');
-  console.log(`[DEBUG] extractAudio: read ${data.length} bytes of output data`);
-  console.log('[DEBUG] extractAudio: cleaning up FFmpeg FS');
-  ffmpeg.FS('unlink', filename);
-  ffmpeg.FS('unlink', 'out.mp3');
-  const blob = new Blob([data], { type: 'audio/mp3' });
-  console.log(`[DEBUG] extractAudio: returning Blob of size ${blob.size}`);
-  return blob;
-}
+import {
+  FLASK_BACKEND_UPLOAD,
+  FLASK_BACKEND_GENERATE_MINDMAP,
+  FLASK_BACKEND_UPLOAD_THUMBNAIL,
+  FLASK_BACKEND_UPLOAD_VIDEO,
+} from './config';
 
 export async function captureThumbnail(videoEl: HTMLVideoElement): Promise<string> {
   console.log('[DEBUG] captureThumbnail: starting thumbnail capture');
@@ -83,4 +66,40 @@ export async function generateMindmapFromSummary(
     console.error('[DEBUG] generateMindmapFromSummary error:', e);
     throw e;
   }
+}
+
+/**
+ * Uploads a thumbnail Blob to your backend storage and returns its public URL.
+ */
+export async function uploadThumbnail(id: string, blob: Blob): Promise<string> {
+  const form = new FormData();
+  form.append('file', blob, `${id}.png`);
+  const res = await fetch(FLASK_BACKEND_UPLOAD_THUMBNAIL, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Thumbnail upload failed: ${res.status} ${res.statusText}: ${text}`);
+  }
+  const { thumbUrl } = await res.json();
+  return thumbUrl;
+}
+
+/**
+ * Uploads a video File to your backend storage and returns its public URL.
+ */
+export async function uploadVideoFile(id: string, file: File): Promise<string> {
+  const form = new FormData();
+  form.append('file', file, `${id}.webm`);
+  const res = await fetch(FLASK_BACKEND_UPLOAD_VIDEO, {
+    method: 'POST',
+    body: form,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Video upload failed: ${res.status} ${res.statusText}: ${text}`);
+  }
+  const { videoUrl } = await res.json();
+  return videoUrl;
 }

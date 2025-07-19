@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Network } from 'vis-network/standalone/umd/vis-network.min.js';
 import { useVideoSummarizer } from '../hooks/useVideoSummarizer';
 import { FLASK_BACKEND_SAVE_SUMMARY } from '../lib/config';
+import { title } from 'process';
 
 export default function Home() {
   const [file, setFile] = useState<File | null>(null);
@@ -34,6 +35,7 @@ useEffect(() => {
     const last = summaries[summaries.length - 1];
     console.log('[DEBUG] New summary entry:', last.id, last.title);
     setSelectedSummaryId(last.id);
+    setVideoURL(last.videoUrl);
   }
 }, [summaries]);
 
@@ -81,6 +83,9 @@ useEffect(() => {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               id: selectedSummary.id,
+              title: selectedSummary.title,
+              thumbnailUrl: selectedSummary.thumbnailUrl,
+              videoUrl: selectedSummary.videoUrl,
               summaryJson: selectedSummary.summaryJson,
               mindmapJson: selectedSummary.mindmapJson
             }),
@@ -155,7 +160,18 @@ useEffect(() => {
                 </div>
                 <div className="flex justify-center mt-4">
                   <button
-                    onClick={handleSummarizeClick}
+                    onClick={async () => {
+                      if (!file) return;
+                      // Check cache: use existing summary if available
+                      const cached = summaries.find(s => s.title === file.name);
+                      if (cached) {
+                        console.log('[DEBUG] summarize: using cached summary for title', file.name);
+                        setSelectedSummaryId(cached.id);
+                        setVideoURL(cached.videoUrl);
+                      } else {
+                        await summarize(file, file.name);
+                      }
+                    }}
                     className="px-6 py-2 bg-blue-600 text-white rounded"
                   >
                     Summarize
@@ -199,11 +215,14 @@ useEffect(() => {
                 summaries.map(s => (
                   <div
                     key={s.id}
-                    onClick={() => setSelectedSummaryId(s.id)}
+                    onClick={() => {
+                      setSelectedSummaryId(s.id);
+                      setVideoURL(s.videoUrl);
+                    }}
                     className="cursor-pointer flex items-center space-x-2 bg-gray-800 p-2 rounded mb-2"
                   >
                     <img
-                      src={s.thumbnail}
+                      src={s.thumbnailUrl}
                       alt={s.title}
                       className="w-16 h-10 object-cover rounded"
                     />
