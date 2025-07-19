@@ -1,6 +1,6 @@
 // hooks/useVideoSummarizer.ts
 import { useState, useRef, useEffect } from 'react';
-import { extractAudio, captureThumbnail, generateMindmapFromSummary, uploadThumbnail, uploadVideoFile } from '../lib/summarizer';
+import { captureThumbnail, generateMindmapFromSummary, uploadThumbnail, uploadVideoFile } from '../lib/summarizer';
 import { v4 as uuidv4 } from 'uuid';
 import { FLASK_JOB_SUBMIT, FLASK_JOB_RESULT } from '../lib/config';
 import { FLASK_BACKEND_SAVE_SUMMARY, FLASK_BACKEND_LIST_SUMMARIES } from '../lib/config';
