@@ -1,16 +1,43 @@
-
-
 import { useRouter } from 'next/router';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network/standalone/umd/vis-network.min.js';
 import { useVideoSummarizer } from '../../hooks/useVideoSummarizer';
 
 export default function VideoDetail() {
   const router = useRouter();
-  const { id } = router.query as { id: string };
-  const { summaries } = useVideoSummarizer();
+  const { id, title: queryTitle } = router.query as { id: string; title?: string };
+  // Safely retrieve videoUrl from query (could be array)
+  const rawQueryVideoUrl = Array.isArray(router.query.videoUrl)
+    ? router.query.videoUrl[0]
+    : router.query.videoUrl;
+  const [videoSrc, setVideoSrc] = useState<string>(rawQueryVideoUrl || '');
+  const { videoRef, summaries, summarize } = useVideoSummarizer();
+  const [isSummarizing, setIsSummarizing] = useState(false);
   const summary = summaries.find(s => s.id === id);
+
+  // Once router populates the query, update videoSrc
+  useEffect(() => {
+    if (rawQueryVideoUrl) {
+      setVideoSrc(rawQueryVideoUrl);
+    }
+  }, [rawQueryVideoUrl]);
+
+  const isNew = !!rawQueryVideoUrl && !summary;
+
+  const displayTitle = (queryTitle as string) || summary?.title || '';
   const visRef = useRef<HTMLDivElement>(null);
+
+  const handleSummarize = async () => {
+    if (!videoSrc) return;
+    setIsSummarizing(true);
+    try {
+      const blob = await fetch(videoSrc).then(res => res.blob());
+      const file = new File([blob], displayTitle || 'video.mp4', { type: blob.type });
+      await summarize(file, displayTitle, id as string);
+    } finally {
+      setIsSummarizing(false);
+    }
+  };
 
   useEffect(() => {
     if (summary?.mindmapJson && visRef.current) {
@@ -61,10 +88,32 @@ export default function VideoDetail() {
     }
   }, [summary]);
 
+  if (isNew) {
+    return (
+      <div className="bg-black text-white min-h-screen p-4 aphasia-style">
+        <button
+          onClick={handleSummarize}
+          disabled={isSummarizing}
+          className="mb-4 px-4 py-2 bg-blue-600 rounded"
+        >
+          {isSummarizing ? 'Summarizing...' : 'Summarize'}
+        </button>
+        <div className="bg-black rounded-lg overflow-hidden">
+          <video
+            ref={videoRef}
+            src={videoSrc || undefined}
+            controls
+            className="w-full h-auto"
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (!summary) {
     return (
       <div className="bg-black text-white min-h-screen p-4 aphasia-style">
-        Loading...
+        <p>Summary not found.</p>
       </div>
     );
   }
@@ -82,7 +131,8 @@ export default function VideoDetail() {
         <div className="flex flex-col flex-shrink-0 w-full lg:w-3/5">
           <div className="bg-black rounded-lg overflow-hidden mb-4">
             <video
-              src={summary.videoUrl}
+              ref={videoRef}
+              src={videoSrc || summary.videoUrl || undefined}
               controls
               className="w-full h-auto"
             />

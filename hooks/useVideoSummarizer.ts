@@ -121,14 +121,20 @@ export function useVideoSummarizer() {
   const summarize = async (
     file: File,
     title: string,
+    idParam?: string,
     modelType: ModelType = ModelType.Gemini
   ) => {
-    if (!videoRef.current) return;
-    const id = uuidv4();
-    const thumbnailDataUrl = await captureThumbnail(videoRef.current);
-    const thumbBlob = await (await fetch(thumbnailDataUrl)).blob();
-    const thumbnailUrl = await uploadThumbnail(id, thumbBlob);
-    console.log('[DEBUG] uploadThumbnail succeeded:', thumbnailUrl);
+    const id = idParam ?? uuidv4();
+    let thumbnailUrl = '';
+    if (videoRef.current) {
+      console.log('[DEBUG] capturing thumbnail');
+      const thumbnailDataUrl = await captureThumbnail(videoRef.current);
+      const thumbBlob = await (await fetch(thumbnailDataUrl)).blob();
+      thumbnailUrl = await uploadThumbnail(id, thumbBlob);
+      console.log('[DEBUG] uploadThumbnail succeeded:', thumbnailUrl);
+    } else {
+      console.log('[DEBUG] videoRef.current not available, skipping thumbnail capture');
+    }
     const videoUrl = await uploadVideoFile(id, file);
     console.log('[DEBUG] uploadVideoFile succeeded:', videoUrl);
     console.log('[DEBUG] submitVideoJob payload:', { id, title, thumbnailUrl, videoUrl });
