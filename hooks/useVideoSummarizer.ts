@@ -83,7 +83,11 @@ interface SummaryEntry {
   thumbnailUrl: string;
   videoUrl: string;
   summaryText?: string;
-  summaryJson?: Array<{ chapterTitle: string; chapterSummary: string }>;
+  summaryJson?: Array<{
+    chapterTitle: string;
+    startTime?: string;
+    chapterSummary: string;
+  }>;
   mindmapJson?: any;
 }
 
