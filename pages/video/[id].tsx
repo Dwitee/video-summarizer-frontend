@@ -4,6 +4,20 @@ import { Network } from 'vis-network/standalone/umd/vis-network.min.js';
 import { DataSet } from 'vis-data';
 import { useVideoSummarizer } from '../../hooks/useVideoSummarizer';
 
+function getDescendants(nodeId: string, edgesData: DataSet<any>): string[] {
+  const descendants: string[] = [];
+  const queue: string[] = [nodeId];
+  while (queue.length) {
+    const current = queue.shift()!;
+    const childrenEdges = edgesData.get({ filter: e => e.from === current });
+    childrenEdges.forEach(e => {
+      descendants.push(e.to);
+      queue.push(e.to);
+    });
+  }
+  return descendants.filter(d => d !== nodeId);
+}
+
 export default function VideoDetail() {
   const router = useRouter();
   const { id, title: queryTitle } = router.query as { id: string; title?: string };
@@ -77,7 +91,7 @@ export default function VideoDetail() {
           color: centralColor
         }
       ];
-      const edgesArray: Array<{ id: string; from: string; to: string }> = [];
+      const edgesArray: Array<{ id: string; from: string; to: string; hidden?: boolean }> = [];
 
       summary.mindmapJson.branches.forEach((branch: any, i: number) => {
         const branchId = `branch_${i}`;
@@ -176,21 +190,6 @@ export default function VideoDetail() {
       const network = new Network(visRef.current, { nodes: nodesData, edges: edgesData }, options);
 
       if (radialLayout) {
-        // Helper to get all descendants of a node (breadth-first)
-        function getDescendants(nodeId: string): string[] {
-          const descendants: string[] = [];
-          const queue: string[] = [nodeId];
-          while (queue.length) {
-            const current = queue.shift()!;
-            const childrenEdges = edgesData.get({ filter: e => e.from === current });
-            childrenEdges.forEach(e => {
-              descendants.push(e.to);
-              queue.push(e.to);
-            });
-          }
-          // Remove the root node itself
-          return descendants.filter(d => d !== nodeId);
-        }
         network.on('click', params => {
           if (params.nodes.length > 0) {
             // Pin this node's x-axis so it doesn't move horizontally; y-axis can move
@@ -199,7 +198,7 @@ export default function VideoDetail() {
 
             // If the central node was clicked, toggle all descendants at once
             if (radialLayout && clickedId === 'central') {
-              const allDesc = getDescendants('central');
+              const allDesc = getDescendants('central', edgesData);
               if (allDesc.length) {
                 const anyVisibleAll = allDesc.some(dId => !nodesData.get(dId)?.hidden);
                 // Toggle all other nodes
@@ -218,7 +217,9 @@ export default function VideoDetail() {
             childEdges.forEach(edge => {
               const childId = edge.to as string;
               const nodeItem = nodesData.get(childId);
-              nodesData.update({ id: childId, hidden: !nodeItem.hidden });
+              if (nodeItem) {
+                nodesData.update({ id: childId, hidden: !nodeItem.hidden });
+              }
               edgesData.update({ id: edge.id, hidden: !edge.hidden });
             });
             // Update branch icon based on any visible child
