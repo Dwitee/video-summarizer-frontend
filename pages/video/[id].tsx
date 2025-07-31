@@ -69,7 +69,7 @@ export default function VideoDetail() {
       const pointColor = radialLayout ? '#4caf50' : 'lightyellow';
 
 
-      const nodesArray: Array<{ id: string; label: string; shape: string; color: string; baseLabel?: string }> = [
+      const nodesArray: Array<{ id: string; label: string; shape: string; color: string; baseLabel?: string; hidden?: boolean }> = [
         {
           id: 'central',
           label: summary.mindmapJson.central.label,
