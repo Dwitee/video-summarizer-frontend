@@ -1,6 +1,6 @@
 import { useRouter } from 'next/router';
 import { v4 as uuidv4 } from 'uuid';
-import { useRef } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useVideoSummarizer } from '../hooks/useVideoSummarizer';
 import Link from 'next/link';
 
@@ -8,6 +8,12 @@ export default function Home() {
   const { summaries, summarize } = useVideoSummarizer();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [showPreview, setShowPreview] = useState(false);
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -26,6 +32,42 @@ export default function Home() {
       e.target.value = '';
     }
   };
+
+  const handleStartRecording = async () => {
+    const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    setStream(mediaStream);
+    setShowPreview(true);
+    const recorder = new MediaRecorder(mediaStream);
+    setMediaRecorder(recorder);
+    setRecordedChunks([]);
+    recorder.ondataavailable = event => {
+      if (event.data.size > 0) {
+        setRecordedChunks(prev => [...prev, event.data]);
+      }
+    };
+    recorder.start();
+    setIsRecording(true);
+  };
+
+  const handleStopRecording = () => {
+    mediaRecorder?.stop();
+    stream?.getTracks().forEach(track => track.stop());
+    setIsRecording(false);
+    setShowPreview(false);
+  };
+
+  useEffect(() => {
+    if (!isRecording && recordedChunks.length > 0) {
+      const blob = new Blob(recordedChunks, { type: 'video/webm' });
+      const file = new File([blob], `recording-${Date.now()}.webm`, { type: 'video/webm' });
+      const id = uuidv4();
+      const url = URL.createObjectURL(file);
+      router.push({
+        pathname: `/video/${id}`,
+        query: { videoUrl: url, title: file.name }
+      });
+    }
+  }, [isRecording, recordedChunks]);
 
   return (
     <div className="bg-black text-white min-h-screen flex flex-col items-start justify-start">
@@ -55,12 +97,31 @@ export default function Home() {
             <p className="text-sm text-gray-400"> Audio & Video</p>
           </div>
           {/* Record card */}
-          <div className="w-48 flex flex-col items-center bg-gray-800 p-6 rounded-lg cursor-pointer aphasia-style">
-            <span className="text-3xl mb-2">🎤</span>
-            <h3 className="text-lg font-medium">Record</h3>
-            <p className="text-sm text-gray-400">Record Video or Audio</p>
+          <div
+            className="w-48 flex flex-col items-center bg-gray-800 p-6 rounded-lg cursor-pointer aphasia-style"
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+          >
+            <span className="text-3xl mb-2">{isRecording ? '⏹️' : '🎤'}</span>
+            <h3 className="text-lg font-medium">{isRecording ? 'Stop' : 'Record'}</h3>
+            <p className="text-sm text-gray-400">{isRecording ? 'Stop Recording' : 'Record Video or Audio'}</p>
           </div>
         </div>
+        {showPreview && stream && (
+          <div className="fixed top-20 right-4 bg-black border border-white p-2 rounded z-50">
+            <video
+              autoPlay
+              muted
+              playsInline
+              ref={video => {
+                if (video && stream) {
+                  video.srcObject = stream;
+                }
+              }}
+              className="w-64 h-36 object-cover rounded"
+            />
+            <p className="text-xs text-center mt-1">Recording Preview</p>
+          </div>
+        )}
         <h2 className="text-2xl font-semibold aphasia-style mb-4">Summarized Videos</h2>
         {summaries.length === 0 ? (
           <p className="text-gray-500">No summaries yet.</p>
