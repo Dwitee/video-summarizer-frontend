@@ -1,6 +1,7 @@
 import { useRouter } from 'next/router';
 import { useEffect, useRef, useState } from 'react';
 import { Network } from 'vis-network/standalone/umd/vis-network.min.js';
+import { DataSet } from 'vis-data';
 import { useVideoSummarizer } from '../../hooks/useVideoSummarizer';
 
 export default function VideoDetail() {
@@ -14,6 +15,7 @@ export default function VideoDetail() {
   const { videoRef, summaries, summarize } = useVideoSummarizer();
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [radialLayout, setRadialLayout] = useState(false);
+  const [mapFullscreen, setMapFullscreen] = useState(false);
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -52,6 +54,8 @@ export default function VideoDetail() {
 
   useEffect(() => {
     if (summary?.mindmapJson && visRef.current) {
+      // clear existing canvas so full-screen container can initialize
+      visRef.current.innerHTML = '';
       // -- Mindmap styling configuration --
       const centralShape = 'box';
       const centralColor = 'mediumpurple';
@@ -65,7 +69,7 @@ export default function VideoDetail() {
       const pointColor = radialLayout ? '#4caf50' : 'lightyellow';
 
 
-      const nodes: Array<{ id: string; label: string; shape: string; color: string }> = [
+      const nodesArray: Array<{ id: string; label: string; shape: string; color: string; baseLabel?: string }> = [
         {
           id: 'central',
           label: summary.mindmapJson.central.label,
@@ -73,29 +77,67 @@ export default function VideoDetail() {
           color: centralColor
         }
       ];
-      const edges: Array<{ from: string; to: string }> = [];
+      const edgesArray: Array<{ id: string; from: string; to: string }> = [];
 
       summary.mindmapJson.branches.forEach((branch: any, i: number) => {
         const branchId = `branch_${i}`;
-        nodes.push({
+        nodesArray.push({
           id: branchId,
-          label: branch.label,
+          baseLabel: branch.label,
+          label: radialLayout
+            ? `${branch.label} ◀️`
+            : branch.label,
           shape: branchShape,
           color: branchColors[i % branchColors.length]
         });
-        edges.push({ from: 'central', to: branchId });
+        edgesArray.push({ id: `central_${branchId}`, from: 'central', to: branchId });
 
         branch.points.forEach((pt: any, j: number) => {
           const pointId = `${branchId}_point_${j}`;
-          nodes.push({
+          nodesArray.push({
             id: pointId,
             label: pt.label,
             shape: pointShape,
-            color: pointColor
+            color: pointColor,
+            hidden: radialLayout // hide only in radial mode
           });
-          edges.push({ from: branchId, to: pointId });
+          edgesArray.push({
+            id: `${branchId}_${pointId}`,
+            from: branchId,
+            to: pointId,
+            hidden: radialLayout // hide edge only in radial mode
+          });
         });
       });
+
+      const nodesData = new DataSet<{
+        id: string;
+        label: string;
+        shape: string;
+        color: string;
+        hidden?: boolean;
+        baseLabel?: string;
+        // allow pinning by axis
+        fixed?: boolean | { x: boolean; y: boolean };
+      }>(nodesArray);
+      const edgesData = new DataSet<{
+        id: string;
+        from: string;
+        to: string;
+        hidden?: boolean;
+      }>(edgesArray);
+
+      // Choose physics settings based on layout
+      const physicsOptions = radialLayout
+        ? { enabled: false }
+        : {
+            barnesHut: {
+              gravitationalConstant: -8000,
+              centralGravity: 0.3,
+              springLength: 95
+            },
+            minVelocity: 0.75
+          };
 
       const options = {
         edges: {
@@ -114,14 +156,7 @@ export default function VideoDetail() {
             roundness: 0.2
           }
         },
-        physics: {
-          barnesHut: {
-            gravitationalConstant: -8000,
-            centralGravity: 0.3,
-            springLength: 95
-          },
-          minVelocity: 0.75
-        },
+        physics: physicsOptions,
         layout: radialLayout
           ? {
               hierarchical: {
@@ -129,15 +164,79 @@ export default function VideoDetail() {
                 direction: 'LR',
                 sortMethod: 'directed',
                 nodeSpacing: 100,
-                levelSeparation: 100,
-                treeSpacing: 100
-              }
+                levelSeparation: 150,
+                treeSpacing: 50
+              },
+              improvedLayout: true
             }
-          : {},
+          : {
+              improvedLayout: true
+            },
       };
-      new Network(visRef.current, { nodes, edges }, options);
+      const network = new Network(visRef.current, { nodes: nodesData, edges: edgesData }, options);
+
+      if (radialLayout) {
+        // Helper to get all descendants of a node (breadth-first)
+        function getDescendants(nodeId: string): string[] {
+          const descendants: string[] = [];
+          const queue: string[] = [nodeId];
+          while (queue.length) {
+            const current = queue.shift()!;
+            const childrenEdges = edgesData.get({ filter: e => e.from === current });
+            childrenEdges.forEach(e => {
+              descendants.push(e.to);
+              queue.push(e.to);
+            });
+          }
+          // Remove the root node itself
+          return descendants.filter(d => d !== nodeId);
+        }
+        network.on('click', params => {
+          if (params.nodes.length > 0) {
+            // Pin this node's x-axis so it doesn't move horizontally; y-axis can move
+            const clickedId = params.nodes[0] as string;
+            nodesData.update({ id: clickedId, fixed: { x: true, y: false } });
+
+            // If the central node was clicked, toggle all descendants at once
+            if (radialLayout && clickedId === 'central') {
+              const allDesc = getDescendants('central');
+              if (allDesc.length) {
+                const anyVisibleAll = allDesc.some(dId => !nodesData.get(dId)?.hidden);
+                // Toggle all other nodes
+                allDesc.forEach(dId => {
+                  nodesData.update({ id: dId, hidden: anyVisibleAll });
+                });
+                // Toggle all edges from central subtree
+                const allEdges = edgesData.get({ filter: e => allDesc.includes(e.to) });
+                allEdges.forEach(edge => {
+                  edgesData.update({ id: edge.id, hidden: anyVisibleAll });
+                });
+              }
+              return;
+            }
+            const childEdges = edgesData.get({ filter: e => e.from === clickedId });
+            childEdges.forEach(edge => {
+              const childId = edge.to as string;
+              const nodeItem = nodesData.get(childId);
+              nodesData.update({ id: childId, hidden: !nodeItem.hidden });
+              edgesData.update({ id: edge.id, hidden: !edge.hidden });
+            });
+            // Update branch icon based on any visible child
+            const branchNode = nodesData.get(clickedId);
+            if (branchNode?.baseLabel) {
+              const children = edgesData.get({ filter: e => e.from === clickedId });
+              const anyVisible = children.some(e => {
+                const child = nodesData.get(e.to as string);
+                return child && !child.hidden;
+              });
+              const newLabel = `${branchNode.baseLabel} ${anyVisible ? '◀️' : '▶️'}`;
+              nodesData.update({ id: clickedId, label: newLabel });
+            }
+          }
+        });
+      }
     }
-  }, [summary, radialLayout]);
+  }, [summary, radialLayout, mapFullscreen]);
 
   if (isNew) {
     return (
@@ -233,20 +332,47 @@ export default function VideoDetail() {
 
         {/* Right column: mind map */}
         {summary.mindmapJson && (
-          <div className="flex-shrink-0 w-full lg:w-2/5">
-            <div className="bg-gray-800 p-6 rounded-lg">
-              <h2 className="text-2xl font-semibold mb-2">Mind Map</h2>
-              <div className="text-right mb-2">
-                <button
-                  onClick={() => setRadialLayout(prev => !prev)}
-                  className="px-2 py-1 bg-blue-500 text-white rounded"
-                >
-                  {radialLayout ? 'Standard' : 'Radial'}
-                </button>
+          <>
+            {mapFullscreen ? (
+              <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
+                <div className="flex justify-between items-center p-4 border-b border-gray-700">
+                  <h2 className="text-2xl font-semibold text-white">Mind Map</h2>
+                  <button
+                    onClick={() => setMapFullscreen(false)}
+                    className="text-white text-2xl"
+                  >
+                    🗗
+                  </button>
+                </div>
+                <div className="flex-grow">
+                  <div ref={visRef} className="h-full w-full" />
+                </div>
               </div>
-              <div ref={visRef} style={{ height: '600px', width: '100%' }} />
-            </div>
-          </div>
+            ) : (
+              <div className="flex-shrink-0 w-full lg:w-2/5">
+                <div className="bg-gray-800 p-6 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <h2 className="text-2xl font-semibold">Mind Map</h2>
+                    <button
+                      onClick={() => setMapFullscreen(true)}
+                      className="text-white text-xl"
+                    >
+                      ⛶
+                    </button>
+                  </div>
+                  <div className="text-right mb-2">
+                    <button
+                      onClick={() => setRadialLayout(prev => !prev)}
+                      className="px-2 py-1 bg-blue-500 text-white rounded"
+                    >
+                      {radialLayout ? 'Standard' : 'Radial'}
+                    </button>
+                  </div>
+                  <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

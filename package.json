@@ -14,7 +14,8 @@
     "react": "latest",
     "react-dom": "latest",
     "uuid": "11.1.0",
-    "vis-network": "^9.1.2"
+    "vis-network": "^9.1.2",
+    "vis-data": "^7.1.10"
   },
   "devDependencies": {
     "@types/node": "24.0.14",
