@@ -32,6 +32,8 @@ export default function VideoDetail() {
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
   const [narrationRate, setNarrationRate] = useState(1);
+  const [narrationVolume, setNarrationVolume] = useState(1);
+  const [narratedEmoji, setNarratedEmoji] = useState<string | null>(null);
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -100,7 +102,7 @@ export default function VideoDetail() {
           id: branchId,
           baseLabel: branch.label,
           label: radialLayout
-            ? `${branch.label} ◀️`
+            ? `${branch.label} ▶️`
             : branch.label,
           shape: branchShape,
           color: branchColors[i % branchColors.length]
@@ -155,8 +157,15 @@ export default function VideoDetail() {
           return new Promise<void>((resolve) => {
             const utterance = new window.SpeechSynthesisUtterance(text);
             utterance.rate = narrationRate;
+            utterance.volume = narrationVolume;
             utterance.onstart = () => {
               if (cancelled) return;
+              // Extract emoji from label (not text) and always set a fallback if none
+              const labelText = nodesData.get(nodeId)?.label ?? '';
+              const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2600-\u27BF]|\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+              const matchedEmoji = labelText.match(emojiRegex);
+              const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
+              setNarratedEmoji(selectedEmoji);
               // Set color and bold font
               nodesData.update({
                 id: nodeId,
@@ -180,6 +189,7 @@ export default function VideoDetail() {
                   bold: false,
                 }
               });
+              setNarratedEmoji(null);
               resolve();
             };
             synth.speak(utterance);
@@ -260,7 +270,11 @@ export default function VideoDetail() {
               improvedLayout: true
             },
       };
-      const network = new Network(visRef.current, { nodes: nodesData, edges: edgesData }, options);
+      const network = new Network(
+        visRef.current,
+        { nodes: nodesData as any, edges: edgesData as any },
+        options
+      );
 
       if (radialLayout) {
         network.on('click', params => {
@@ -306,6 +320,47 @@ export default function VideoDetail() {
               const newLabel = `${branchNode.baseLabel} ${anyVisible ? '◀️' : '▶️'}`;
               nodesData.update({ id: clickedId, label: newLabel });
             }
+          }
+        });
+      }
+
+      // Add node click narration when narrationEnabled is false
+      if (!narrationEnabled) {
+        network.on('click', async (params) => {
+          const clickedId = params.nodes[0];
+          if (!clickedId) return;
+
+          const node = nodesData.get(clickedId);
+          if (!node) return;
+
+          const findNarration = (id: string): string | null => {
+            if (id === 'central') return summary?.mindmapJson?.central?.narration || null;
+            const branchMatch = id.match(/^branch_(\d+)$/);
+            if (branchMatch) {
+              const branchIndex = Number(branchMatch[1]);
+              return summary?.mindmapJson?.branches?.[branchIndex]?.narration || null;
+            }
+            const pointMatch = id.match(/^branch_(\d+)_point_(\d+)$/);
+            if (pointMatch) {
+              const [_, branchIndex, pointIndex] = pointMatch.map(Number);
+              return summary?.mindmapJson?.branches?.[branchIndex]?.points?.[pointIndex]?.narration || null;
+            }
+            return null;
+          };
+
+          const text = findNarration(clickedId);
+          if (text) {
+            // Update the narratedEmoji state based on the clicked node's label
+            const labelText = typeof node.label === 'string' ? node.label : '';
+            const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2600-\u27BF]|\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+            const matchedEmoji = labelText.match(emojiRegex);
+            const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
+            setNarratedEmoji(selectedEmoji);
+
+            const utterance = new window.SpeechSynthesisUtterance(text);
+            utterance.rate = narrationRate;
+            utterance.volume = narrationVolume;
+            window.speechSynthesis.speak(utterance);
           }
         });
       }
@@ -449,8 +504,26 @@ export default function VideoDetail() {
                     </button>
                   </div>
                 </div>
-                <div className="flex-grow">
+                <div className="flex-grow relative">
+                  {narratedEmoji && (
+                    <div className="absolute top-4 left-4 text-7xl z-50">
+                      {narratedEmoji}
+                    </div>
+                  )}
                   <div ref={visRef} className="h-full w-full" />
+                  <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+                    <span role="img" aria-label="Volume" className="mr-2">🔊</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={narrationVolume}
+                      onChange={(e) => setNarrationVolume(Number(e.target.value))}
+                      className="w-32"
+                      title="Narration Volume"
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -488,7 +561,27 @@ export default function VideoDetail() {
                       <option value={1}>1x</option>
                     </select>
                   </div>
-                  <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                  <div className="relative">
+                    {narratedEmoji && (
+                      <div className="absolute top-4 left-4 text-7xl z-50">
+                        {narratedEmoji}
+                      </div>
+                    )}
+                    <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                    <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+                      <span role="img" aria-label="Volume" className="mr-2">🔊</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={narrationVolume}
+                        onChange={(e) => setNarrationVolume(Number(e.target.value))}
+                        className="w-32"
+                        title="Narration Volume"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
