@@ -29,7 +29,11 @@ export default function VideoDetail() {
   const { videoRef, summaries, summarize } = useVideoSummarizer();
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [radialLayout, setRadialLayout] = useState(false);
+  const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [narrationRate, setNarrationRate] = useState(1);
+  const [narrationVolume, setNarrationVolume] = useState(1);
+  const [narratedEmoji, setNarratedEmoji] = useState<string | null>(null);
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -82,7 +86,6 @@ export default function VideoDetail() {
       const pointShape = radialLayout ? 'box' : 'ellipse';
       const pointColor = radialLayout ? '#4caf50' : 'lightyellow';
 
-
       const nodesArray: Array<{ id: string; label: string; shape: string; color: string; baseLabel?: string; hidden?: boolean }> = [
         {
           id: 'central',
@@ -99,7 +102,7 @@ export default function VideoDetail() {
           id: branchId,
           baseLabel: branch.label,
           label: radialLayout
-            ? `${branch.label} ◀️`
+            ? `${branch.label} ▶️`
             : branch.label,
           shape: branchShape,
           color: branchColors[i % branchColors.length]
@@ -133,6 +136,7 @@ export default function VideoDetail() {
         baseLabel?: string;
         // allow pinning by axis
         fixed?: boolean | { x: boolean; y: boolean };
+        font?: { size: number; face: string; bold: boolean };
       }>(nodesArray);
       const edgesData = new DataSet<{
         id: string;
@@ -140,6 +144,85 @@ export default function VideoDetail() {
         to: string;
         hidden?: boolean;
       }>(edgesArray);
+
+      // --- Narration (Text-to-Speech) ---
+      const synth = window.speechSynthesis;
+      let cancelled = false;
+
+      const playNarration = async () => {
+        if (!synth) return;
+
+        // Highlight the node while narrating, update font styling instead of label
+        const speak = async (nodeId: string, text: string) => {
+          return new Promise<void>((resolve) => {
+            const utterance = new window.SpeechSynthesisUtterance(text);
+            utterance.rate = narrationRate;
+            utterance.volume = narrationVolume;
+            utterance.onstart = () => {
+              if (cancelled) return;
+              // Extract emoji from label (not text) and always set a fallback if none
+              const labelText = nodesData.get(nodeId)?.label ?? '';
+              const emojiRegex = /^([\u{1F300}-\u{1F6FF}]|[\u{1F900}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}])/u;
+              const matchedEmoji = labelText.match(emojiRegex);
+              const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
+              setNarratedEmoji(selectedEmoji);
+              // Set color and bold font
+              nodesData.update({
+                id: nodeId,
+                color: 'gold',
+                font: {
+                  size: 24,
+                  face: 'arial',
+                  bold: true,
+                }
+              });
+            };
+            utterance.onend = () => {
+              if (cancelled) return;
+              // Remove color and revert font
+              nodesData.update({
+                id: nodeId,
+                color: undefined,
+                font: {
+                  size: 14,
+                  face: 'arial',
+                  bold: false,
+                }
+              });
+              setNarratedEmoji(null);
+              resolve();
+            };
+            synth.speak(utterance);
+          });
+        };
+
+        // Start from central
+        const central = summary.mindmapJson.central;
+        if (central.narration && !cancelled) {
+          await speak('central', central.narration);
+        }
+
+        for (let i = 0; i < summary.mindmapJson.branches.length; i++) {
+          if (cancelled) break;
+          const branch = summary.mindmapJson.branches[i];
+          const branchId = `branch_${i}`;
+          if (branch.narration && !cancelled) {
+            await speak(branchId, branch.narration);
+          }
+          for (let j = 0; j < branch.points.length; j++) {
+            if (cancelled) break;
+            const pt = branch.points[j];
+            const pointId = `${branchId}_point_${j}`;
+            if (pt.narration && !cancelled) {
+              await speak(pointId, pt.narration);
+            }
+          }
+        }
+      };
+
+      if (narrationEnabled) {
+        playNarration();
+      }
 
       // Choose physics settings based on layout
       const physicsOptions = radialLayout
@@ -187,7 +270,11 @@ export default function VideoDetail() {
               improvedLayout: true
             },
       };
-      const network = new Network(visRef.current, { nodes: nodesData, edges: edgesData }, options);
+      const network = new Network(
+        visRef.current,
+        { nodes: nodesData as any, edges: edgesData as any },
+        options
+      );
 
       if (radialLayout) {
         network.on('click', params => {
@@ -236,8 +323,57 @@ export default function VideoDetail() {
           }
         });
       }
+
+      // Add node click narration when narrationEnabled is false
+      if (!narrationEnabled) {
+        network.on('click', async (params) => {
+          const clickedId = params.nodes[0];
+          if (!clickedId) return;
+
+          const node = nodesData.get(clickedId);
+          if (!node) return;
+
+          const findNarration = (id: string): string | null => {
+            if (id === 'central') return summary?.mindmapJson?.central?.narration || null;
+            const branchMatch = id.match(/^branch_(\d+)$/);
+            if (branchMatch) {
+              const branchIndex = Number(branchMatch[1]);
+              return summary?.mindmapJson?.branches?.[branchIndex]?.narration || null;
+            }
+            const pointMatch = id.match(/^branch_(\d+)_point_(\d+)$/);
+            if (pointMatch) {
+              const [_, branchIndex, pointIndex] = pointMatch.map(Number);
+              return summary?.mindmapJson?.branches?.[branchIndex]?.points?.[pointIndex]?.narration || null;
+            }
+            return null;
+          };
+
+          const text = findNarration(clickedId);
+          if (text) {
+            // Update the narratedEmoji state based on the clicked node's label
+            const labelText = typeof (node as any).label === 'string' ? (node as any).label : '';
+            const emojiRegex = /^([\u{1F300}-\u{1F6FF}]|[\u{1F900}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}])/u;
+            const matchedEmoji = labelText.match(emojiRegex);
+            const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
+            setNarratedEmoji(selectedEmoji);
+
+            const utterance = new window.SpeechSynthesisUtterance(text);
+            utterance.rate = narrationRate;
+            utterance.volume = narrationVolume;
+            window.speechSynthesis.speak(utterance);
+          }
+        });
+      }
+
+      // Cleanup function to cancel narration if component unmounts or narrationEnabled changes
+      return () => {
+        cancelled = true;
+        if (synth?.speaking) {
+          synth.cancel();
+        }
+      };
     }
-  }, [summary, radialLayout, mapFullscreen]);
+  }, [summary, radialLayout, mapFullscreen, narrationEnabled]);
 
   if (isNew) {
     return (
@@ -338,15 +474,56 @@ export default function VideoDetail() {
               <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
                 <div className="flex justify-between items-center p-4 border-b border-gray-700">
                   <h2 className="text-2xl font-semibold text-white">Mind Map</h2>
-                  <button
-                    onClick={() => setMapFullscreen(false)}
-                    className="text-white text-2xl"
-                  >
-                    🗗
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setRadialLayout(prev => !prev)}
+                      className="px-2 py-1 bg-blue-500 text-white rounded"
+                    >
+                      {radialLayout ? 'Standard' : 'Radial'}
+                    </button>
+                    <button
+                      onClick={() => setNarrationEnabled(prev => !prev)}
+                      className="px-2 py-1 bg-green-600 text-white rounded"
+                    >
+                      {narrationEnabled ? 'Stop Narration' : 'Narrate'}
+                    </button>
+                    <select
+                      value={narrationRate}
+                      onChange={(e) => setNarrationRate(Number(e.target.value))}
+                      className="px-2 py-1 bg-gray-700 text-white rounded"
+                    >
+                      <option value={0.25}>0.25x</option>
+                      <option value={0.5}>0.5x</option>
+                      <option value={1}>1x</option>
+                    </select>
+                    <button
+                      onClick={() => setMapFullscreen(false)}
+                      className="text-white text-2xl"
+                    >
+                      ╳
+                    </button>
+                  </div>
                 </div>
-                <div className="flex-grow">
+                <div className="flex-grow relative">
+                  {narratedEmoji && (
+                    <div className="absolute top-4 left-4 text-7xl z-50">
+                      {narratedEmoji}
+                    </div>
+                  )}
                   <div ref={visRef} className="h-full w-full" />
+                  <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+                    <span role="img" aria-label="Volume" className="mr-2">🔊</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.01"
+                      value={narrationVolume}
+                      onChange={(e) => setNarrationVolume(Number(e.target.value))}
+                      className="w-32"
+                      title="Narration Volume"
+                    />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -361,15 +538,50 @@ export default function VideoDetail() {
                       ⛶
                     </button>
                   </div>
-                  <div className="text-right mb-2">
+                  <div className="text-right mb-2 space-x-2">
                     <button
                       onClick={() => setRadialLayout(prev => !prev)}
                       className="px-2 py-1 bg-blue-500 text-white rounded"
                     >
                       {radialLayout ? 'Standard' : 'Radial'}
                     </button>
+                    <button
+                      onClick={() => setNarrationEnabled(prev => !prev)}
+                      className="px-2 py-1 bg-green-600 text-white rounded"
+                    >
+                      {narrationEnabled ? 'Stop Narration' : 'Narrate'}
+                    </button>
+                    <select
+                      value={narrationRate}
+                      onChange={(e) => setNarrationRate(Number(e.target.value))}
+                      className="px-2 py-1 bg-gray-700 text-white rounded"
+                    >
+                      <option value={0.25}>0.25x</option>
+                      <option value={0.5}>0.5x</option>
+                      <option value={1}>1x</option>
+                    </select>
                   </div>
-                  <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                  <div className="relative">
+                    {narratedEmoji && (
+                      <div className="absolute top-4 left-4 text-7xl z-50">
+                        {narratedEmoji}
+                      </div>
+                    )}
+                    <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                    <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+                      <span role="img" aria-label="Volume" className="mr-2">🔊</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="1"
+                        step="0.01"
+                        value={narrationVolume}
+                        onChange={(e) => setNarrationVolume(Number(e.target.value))}
+                        className="w-32"
+                        title="Narration Volume"
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
