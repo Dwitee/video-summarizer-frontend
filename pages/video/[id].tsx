@@ -29,7 +29,9 @@ export default function VideoDetail() {
   const { videoRef, summaries, summarize } = useVideoSummarizer();
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [radialLayout, setRadialLayout] = useState(false);
+  const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
+  const [narrationRate, setNarrationRate] = useState(1);
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -82,7 +84,6 @@ export default function VideoDetail() {
       const pointShape = radialLayout ? 'box' : 'ellipse';
       const pointColor = radialLayout ? '#4caf50' : 'lightyellow';
 
-
       const nodesArray: Array<{ id: string; label: string; shape: string; color: string; baseLabel?: string; hidden?: boolean }> = [
         {
           id: 'central',
@@ -133,6 +134,7 @@ export default function VideoDetail() {
         baseLabel?: string;
         // allow pinning by axis
         fixed?: boolean | { x: boolean; y: boolean };
+        font?: { size: number; face: string; bold: boolean };
       }>(nodesArray);
       const edgesData = new DataSet<{
         id: string;
@@ -140,6 +142,77 @@ export default function VideoDetail() {
         to: string;
         hidden?: boolean;
       }>(edgesArray);
+
+      // --- Narration (Text-to-Speech) ---
+      const synth = window.speechSynthesis;
+      let cancelled = false;
+
+      const playNarration = async () => {
+        if (!synth) return;
+
+        // Highlight the node while narrating, update font styling instead of label
+        const speak = async (nodeId: string, text: string) => {
+          return new Promise<void>((resolve) => {
+            const utterance = new window.SpeechSynthesisUtterance(text);
+            utterance.rate = narrationRate;
+            utterance.onstart = () => {
+              if (cancelled) return;
+              // Set color and bold font
+              nodesData.update({
+                id: nodeId,
+                color: 'gold',
+                font: {
+                  size: 24,
+                  face: 'arial',
+                  bold: true,
+                }
+              });
+            };
+            utterance.onend = () => {
+              if (cancelled) return;
+              // Remove color and revert font
+              nodesData.update({
+                id: nodeId,
+                color: undefined,
+                font: {
+                  size: 14,
+                  face: 'arial',
+                  bold: false,
+                }
+              });
+              resolve();
+            };
+            synth.speak(utterance);
+          });
+        };
+
+        // Start from central
+        const central = summary.mindmapJson.central;
+        if (central.narration && !cancelled) {
+          await speak('central', central.narration);
+        }
+
+        for (let i = 0; i < summary.mindmapJson.branches.length; i++) {
+          if (cancelled) break;
+          const branch = summary.mindmapJson.branches[i];
+          const branchId = `branch_${i}`;
+          if (branch.narration && !cancelled) {
+            await speak(branchId, branch.narration);
+          }
+          for (let j = 0; j < branch.points.length; j++) {
+            if (cancelled) break;
+            const pt = branch.points[j];
+            const pointId = `${branchId}_point_${j}`;
+            if (pt.narration && !cancelled) {
+              await speak(pointId, pt.narration);
+            }
+          }
+        }
+      };
+
+      if (narrationEnabled) {
+        playNarration();
+      }
 
       // Choose physics settings based on layout
       const physicsOptions = radialLayout
@@ -236,8 +309,16 @@ export default function VideoDetail() {
           }
         });
       }
+
+      // Cleanup function to cancel narration if component unmounts or narrationEnabled changes
+      return () => {
+        cancelled = true;
+        if (synth?.speaking) {
+          synth.cancel();
+        }
+      };
     }
-  }, [summary, radialLayout, mapFullscreen]);
+  }, [summary, radialLayout, mapFullscreen, narrationEnabled]);
 
   if (isNew) {
     return (
@@ -338,12 +419,35 @@ export default function VideoDetail() {
               <div className="fixed inset-0 bg-gray-900 z-50 flex flex-col">
                 <div className="flex justify-between items-center p-4 border-b border-gray-700">
                   <h2 className="text-2xl font-semibold text-white">Mind Map</h2>
-                  <button
-                    onClick={() => setMapFullscreen(false)}
-                    className="text-white text-2xl"
-                  >
-                    🗗
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setRadialLayout(prev => !prev)}
+                      className="px-2 py-1 bg-blue-500 text-white rounded"
+                    >
+                      {radialLayout ? 'Standard' : 'Radial'}
+                    </button>
+                    <button
+                      onClick={() => setNarrationEnabled(prev => !prev)}
+                      className="px-2 py-1 bg-green-600 text-white rounded"
+                    >
+                      {narrationEnabled ? 'Stop Narration' : 'Narrate'}
+                    </button>
+                    <select
+                      value={narrationRate}
+                      onChange={(e) => setNarrationRate(Number(e.target.value))}
+                      className="px-2 py-1 bg-gray-700 text-white rounded"
+                    >
+                      <option value={0.25}>0.25x</option>
+                      <option value={0.5}>0.5x</option>
+                      <option value={1}>1x</option>
+                    </select>
+                    <button
+                      onClick={() => setMapFullscreen(false)}
+                      className="text-white text-2xl"
+                    >
+                      ╳
+                    </button>
+                  </div>
                 </div>
                 <div className="flex-grow">
                   <div ref={visRef} className="h-full w-full" />
@@ -361,13 +465,28 @@ export default function VideoDetail() {
                       ⛶
                     </button>
                   </div>
-                  <div className="text-right mb-2">
+                  <div className="text-right mb-2 space-x-2">
                     <button
                       onClick={() => setRadialLayout(prev => !prev)}
                       className="px-2 py-1 bg-blue-500 text-white rounded"
                     >
                       {radialLayout ? 'Standard' : 'Radial'}
                     </button>
+                    <button
+                      onClick={() => setNarrationEnabled(prev => !prev)}
+                      className="px-2 py-1 bg-green-600 text-white rounded"
+                    >
+                      {narrationEnabled ? 'Stop Narration' : 'Narrate'}
+                    </button>
+                    <select
+                      value={narrationRate}
+                      onChange={(e) => setNarrationRate(Number(e.target.value))}
+                      className="px-2 py-1 bg-gray-700 text-white rounded"
+                    >
+                      <option value={0.25}>0.25x</option>
+                      <option value={0.5}>0.5x</option>
+                      <option value={1}>1x</option>
+                    </select>
                   </div>
                   <div ref={visRef} style={{ height: '600px', width: '100%' }} />
                 </div>
