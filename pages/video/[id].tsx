@@ -162,7 +162,7 @@ export default function VideoDetail() {
               if (cancelled) return;
               // Extract emoji from label (not text) and always set a fallback if none
               const labelText = nodesData.get(nodeId)?.label ?? '';
-              const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2600-\u27BF]|\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+              const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0-\u23F3\u25FD-\u25FE\u2600-\u27BF])/g;
               const matchedEmoji = labelText.match(emojiRegex);
               const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
               setNarratedEmoji(selectedEmoji);
@@ -352,7 +352,7 @@ export default function VideoDetail() {
           if (text) {
             // Update the narratedEmoji state based on the clicked node's label
             const labelText = typeof node.label === 'string' ? node.label : '';
-            const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0\u23F3\u25FD\u25FE\u2600-\u27BF]|\p{Emoji_Presentation}|\p{Extended_Pictographic})/gu;
+            const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0-\u23F3\u25FD-\u25FE\u2600-\u27BF])/g;
             const matchedEmoji = labelText.match(emojiRegex);
             const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
             setNarratedEmoji(selectedEmoji);
