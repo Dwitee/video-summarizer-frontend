@@ -351,7 +351,7 @@ export default function VideoDetail() {
           const text = findNarration(clickedId);
           if (text) {
             // Update the narratedEmoji state based on the clicked node's label
-            const labelText = typeof node.label === 'string' ? node.label : '';
+            const labelText = typeof (node as any).label === 'string' ? (node as any).label : '';
             const emojiRegex = /([\u231A-\u231B\u23E9-\u23EC\u23F0-\u23F3\u25FD-\u25FE\u2600-\u27BF])/g;
             const matchedEmoji = labelText.match(emojiRegex);
             const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
