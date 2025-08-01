@@ -72,7 +72,9 @@ export default function Home() {
   return (
     <div className="bg-black text-white min-h-screen flex flex-col items-start justify-start">
       <header className="w-full bg-gray-900 py-4 text-center aphasia-style">
-        <h1 className="text-4xl font-bold">Video Summarizer</h1>
+        <h1 className="text-4xl font-bold font-sans tracking-tight leading-tight text-white">
+          ReMindMap <span className="text-gray-300">(Simplifies the content)</span>
+        </h1>
       </header>
 
 
@@ -94,16 +96,16 @@ export default function Home() {
           >
             <span className="text-3xl mb-2">⤴️</span>
             <h3 className="text-lg font-medium">Upload</h3>
-            <p className="text-sm text-gray-400"> Audio & Video</p>
+            <p className="text-sm text-gray-400">Upload Audio & Video to simplify</p>
           </div>
           {/* Record card */}
           <div
             className="w-48 flex flex-col items-center bg-gray-800 p-6 rounded-lg cursor-pointer aphasia-style"
             onClick={isRecording ? handleStopRecording : handleStartRecording}
           >
-            <span className="text-3xl mb-2">{isRecording ? '⏹️' : '🎤'}</span>
+            <span className="text-3xl mb-2">{isRecording ? '⏹️' : '🔴'}</span>
             <h3 className="text-lg font-medium">{isRecording ? 'Stop' : 'Record'}</h3>
-            <p className="text-sm text-gray-400">{isRecording ? 'Stop Recording' : 'Record Video or Audio'}</p>
+            <p className="text-sm text-gray-400">{isRecording ? 'Stop Recording' : 'Record Video to simplify'}</p>
           </div>
         </div>
         {showPreview && stream && (
