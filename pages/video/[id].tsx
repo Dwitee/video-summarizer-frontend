@@ -34,6 +34,7 @@ export default function VideoDetail() {
   const [narrationRate, setNarrationRate] = useState(1);
   const [narrationVolume, setNarrationVolume] = useState(1);
   const [narratedEmoji, setNarratedEmoji] = useState<string | null>(null);
+  const [currentNarrationText, setCurrentNarrationText] = useState<string>('');
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -166,6 +167,7 @@ export default function VideoDetail() {
               const matchedEmoji = labelText.match(emojiRegex);
               const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
               setNarratedEmoji(selectedEmoji);
+              setCurrentNarrationText(text);
               // Set color and bold font
               nodesData.update({
                 id: nodeId,
@@ -190,6 +192,7 @@ export default function VideoDetail() {
                 }
               });
               setNarratedEmoji(null);
+              setCurrentNarrationText('');
               resolve();
             };
             synth.speak(utterance);
@@ -218,6 +221,7 @@ export default function VideoDetail() {
             }
           }
         }
+        setCurrentNarrationText('');
       };
 
       if (narrationEnabled) {
@@ -356,10 +360,15 @@ export default function VideoDetail() {
             const matchedEmoji = labelText.match(emojiRegex);
             const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
             setNarratedEmoji(selectedEmoji);
+            setCurrentNarrationText(text);
 
             const utterance = new window.SpeechSynthesisUtterance(text);
             utterance.rate = narrationRate;
             utterance.volume = narrationVolume;
+            utterance.onend = () => {
+              setNarratedEmoji(null);
+              setCurrentNarrationText('');
+            };
             window.speechSynthesis.speak(utterance);
           }
         });
@@ -368,6 +377,7 @@ export default function VideoDetail() {
       // Cleanup function to cancel narration if component unmounts or narrationEnabled changes
       return () => {
         cancelled = true;
+        setCurrentNarrationText('');
         if (synth?.speaking) {
           synth.cancel();
         }
@@ -385,7 +395,7 @@ export default function VideoDetail() {
         >
           {isSummarizing ? 'Summarizing...' : 'Summarize'}
         </button>
-        <div className="bg-black rounded-lg overflow-hidden">
+        <div className="sticky-video-wrapper sticky top-0 z-40 bg-black w-1/2 mx-auto">
           <video
             ref={videoRef}
             src={videoSrc || undefined}
@@ -416,7 +426,7 @@ export default function VideoDetail() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left column: video & summary */}
         <div className="flex flex-col flex-shrink-0 w-full lg:w-3/5">
-          <div className="bg-black rounded-lg overflow-hidden mb-4">
+          <div className="sticky-video-wrapper sticky top-0 z-40 bg-black w-1/2 mx-auto mb-4">
             <video
               ref={videoRef}
               src={videoSrc || summary.videoUrl || undefined}
@@ -504,14 +514,22 @@ export default function VideoDetail() {
                     </button>
                   </div>
                 </div>
-                <div className="flex-grow relative">
-                  {narratedEmoji && (
-                    <div className="absolute top-4 left-4 text-7xl z-50">
-                      {narratedEmoji}
-                    </div>
-                  )}
-                  <div ref={visRef} className="h-full w-full" />
-                  <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+                  <div className="flex-grow relative">
+                    {narratedEmoji && (
+                      <div className="absolute top-4 left-4 text-7xl z-50">
+                        {narratedEmoji}
+                      </div>
+                    )}
+                    <div ref={visRef} className="h-full w-full" />
+                    {/* Narration text overlay for fullscreen mind map */}
+                    {!!currentNarrationText && (
+                      <div className="absolute bottom-20 left-4 right-4 bg-black bg-opacity-70 text-white text-sm font-mono p-3 rounded shadow aphasia-style">
+                        {currentNarrationText}
+                      </div>
+                    )}
+                  </div>
+                  {/* Volume slider for fullscreen mode, static position just below the rate select */}
+                  <div className="px-4 pb-4 pt-2 flex items-center justify-end space-x-2">
                     <span role="img" aria-label="Volume" className="mr-2">🔊</span>
                     <input
                       type="range"
@@ -524,51 +542,45 @@ export default function VideoDetail() {
                       title="Narration Volume"
                     />
                   </div>
-                </div>
               </div>
             ) : (
-              <div className="flex-shrink-0 w-full lg:w-2/5">
-                <div className="bg-gray-800 p-6 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <h2 className="text-2xl font-semibold">Mind Map</h2>
-                    <button
-                      onClick={() => setMapFullscreen(true)}
-                      className="text-white text-xl"
-                    >
-                      ⛶
-                    </button>
-                  </div>
-                  <div className="text-right mb-2 space-x-2">
-                    <button
-                      onClick={() => setRadialLayout(prev => !prev)}
-                      className="px-2 py-1 bg-blue-500 text-white rounded"
-                    >
-                      {radialLayout ? 'Standard' : 'Radial'}
-                    </button>
-                    <button
-                      onClick={() => setNarrationEnabled(prev => !prev)}
-                      className="px-2 py-1 bg-green-600 text-white rounded"
-                    >
-                      {narrationEnabled ? 'Stop Narration' : 'Narrate'}
-                    </button>
-                    <select
-                      value={narrationRate}
-                      onChange={(e) => setNarrationRate(Number(e.target.value))}
-                      className="px-2 py-1 bg-gray-700 text-white rounded"
-                    >
-                      <option value={0.25}>0.25x</option>
-                      <option value={0.5}>0.5x</option>
-                      <option value={1}>1x</option>
-                    </select>
-                  </div>
-                  <div className="relative">
-                    {narratedEmoji && (
-                      <div className="absolute top-4 left-4 text-7xl z-50">
-                        {narratedEmoji}
-                      </div>
-                    )}
-                    <div ref={visRef} style={{ height: '600px', width: '100%' }} />
-                    <div className="absolute bottom-4 right-4 bg-gray-800 p-2 rounded shadow-lg z-10 flex items-center">
+              <div className="flex-shrink-0 w-full lg:w-2/5" style={{ minHeight: "700px" }}>
+                <div className="sticky top-0 z-30">
+                  <div className="bg-gray-800 p-6 rounded-lg">
+                    <div className="flex justify-between items-center mb-2">
+                      <h2 className="text-2xl font-semibold">Mind Map</h2>
+                      <button
+                        onClick={() => setMapFullscreen(true)}
+                        className="text-white text-xl"
+                      >
+                        ⛶
+                      </button>
+                    </div>
+                    <div className="text-right mb-2 space-x-2">
+                      <button
+                        onClick={() => setRadialLayout(prev => !prev)}
+                        className="px-2 py-1 bg-blue-500 text-white rounded"
+                      >
+                        {radialLayout ? 'Standard' : 'Radial'}
+                      </button>
+                      <button
+                        onClick={() => setNarrationEnabled(prev => !prev)}
+                        className="px-2 py-1 bg-green-600 text-white rounded"
+                      >
+                        {narrationEnabled ? 'Stop Narration' : 'Narrate'}
+                      </button>
+                      <select
+                        value={narrationRate}
+                        onChange={(e) => setNarrationRate(Number(e.target.value))}
+                        className="px-2 py-1 bg-gray-700 text-white rounded"
+                      >
+                        <option value={0.25}>0.25x</option>
+                        <option value={0.5}>0.5x</option>
+                        <option value={1}>1x</option>
+                      </select>
+                    </div>
+                    {/* Volume slider just below the layout buttons and rate selector */}
+                    <div className="mt-2 flex items-center justify-end space-x-2">
                       <span role="img" aria-label="Volume" className="mr-2">🔊</span>
                       <input
                         type="range"
@@ -580,6 +592,21 @@ export default function VideoDetail() {
                         className="w-32"
                         title="Narration Volume"
                       />
+                    </div>
+                    <div className="relative">
+                      {narratedEmoji && (
+                        <div className="absolute top-4 left-4 text-7xl z-50">
+                          {narratedEmoji}
+                        </div>
+                      )}
+                      <div ref={visRef} style={{ height: '600px', width: '100%' }} />
+                      {/* Narration text display */}
+                      {!!currentNarrationText && (
+                        <div className="mt-4 p-2 bg-black bg-opacity-70 rounded text-white text-sm font-mono aphasia-style">
+                          {currentNarrationText}
+                        </div>
+                      )}
+                      {/* Volume control moved above, removed absolute block */}
                     </div>
                   </div>
                 </div>
