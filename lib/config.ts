@@ -10,3 +10,4 @@ export const FLASK_BACKEND_UPLOAD_MINDMAP  = `/api/upload-mindmap`;
 
 export const FLASK_BACKEND_SAVE_SUMMARY   = `/api/save-summary`;
 export const FLASK_BACKEND_LIST_SUMMARIES = `/api/list-summaries`;
+export const FLASK_BACKEND_DOWNLOAD_YOUTUBE = `/api/download-youtube-and-submit`;

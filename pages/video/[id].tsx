@@ -31,10 +31,11 @@ export default function VideoDetail() {
   const [radialLayout, setRadialLayout] = useState(false);
   const [narrationEnabled, setNarrationEnabled] = useState(false);
   const [mapFullscreen, setMapFullscreen] = useState(false);
-  const [narrationRate, setNarrationRate] = useState(1);
+  const [narrationRate, setNarrationRate] = useState(0.5);
   const [narrationVolume, setNarrationVolume] = useState(1);
   const [narratedEmoji, setNarratedEmoji] = useState<string | null>(null);
   const [currentNarrationText, setCurrentNarrationText] = useState<string>('');
+  const [fontSize, setFontSize] = useState(34);
   const summary = summaries.find(s => s.id === id);
 
   // Once router populates the query, update videoSrc
@@ -53,6 +54,8 @@ export default function VideoDetail() {
     if (!videoSrc) return;
     setIsSummarizing(true);
     try {
+      // Debug: log the videoSrc before fetching
+      console.log('Fetching videoSrc:', videoSrc);
       const blob = await fetch(videoSrc).then(res => res.blob());
       const file = new File([blob], displayTitle || 'video.mp4', { type: blob.type });
       await summarize(file, displayTitle, id as string);
@@ -138,7 +141,16 @@ export default function VideoDetail() {
         // allow pinning by axis
         fixed?: boolean | { x: boolean; y: boolean };
         font?: { size: number; face: string; bold: boolean };
-      }>(nodesArray);
+      }>(
+        nodesArray.map(node => ({
+          ...node,
+          font: {
+            size: 16,
+            face: 'arial',
+            bold: false,
+          }
+        }))
+      );
       const edgesData = new DataSet<{
         id: string;
         from: string;
@@ -153,7 +165,7 @@ export default function VideoDetail() {
       const playNarration = async () => {
         if (!synth) return;
 
-        // Highlight the node while narrating, update font styling instead of label
+        // Highlight the node while narrating, update color only (not font)
         const speak = async (nodeId: string, text: string) => {
           return new Promise<void>((resolve) => {
             const utterance = new window.SpeechSynthesisUtterance(text);
@@ -168,28 +180,18 @@ export default function VideoDetail() {
               const selectedEmoji = matchedEmoji && matchedEmoji.length > 0 ? matchedEmoji[0] : '🎙️';
               setNarratedEmoji(selectedEmoji);
               setCurrentNarrationText(text);
-              // Set color and bold font
+              // Set color only
               nodesData.update({
                 id: nodeId,
                 color: 'gold',
-                font: {
-                  size: 24,
-                  face: 'arial',
-                  bold: true,
-                }
               });
             };
             utterance.onend = () => {
               if (cancelled) return;
-              // Remove color and revert font
+              // Remove color only
               nodesData.update({
                 id: nodeId,
                 color: undefined,
-                font: {
-                  size: 14,
-                  face: 'arial',
-                  bold: false,
-                }
               });
               setNarratedEmoji(null);
               setCurrentNarrationText('');
@@ -362,10 +364,21 @@ export default function VideoDetail() {
             setNarratedEmoji(selectedEmoji);
             setCurrentNarrationText(text);
 
+            // Set color only for clicked node
+            nodesData.update({
+              id: clickedId,
+              color: 'gold',
+            });
+
             const utterance = new window.SpeechSynthesisUtterance(text);
             utterance.rate = narrationRate;
             utterance.volume = narrationVolume;
             utterance.onend = () => {
+              // Remove color only for clicked node
+              nodesData.update({
+                id: clickedId,
+                color: undefined,
+              });
               setNarratedEmoji(null);
               setCurrentNarrationText('');
             };
@@ -385,6 +398,16 @@ export default function VideoDetail() {
     }
   }, [summary, radialLayout, mapFullscreen, narrationEnabled]);
 
+  const [scrollY, setScrollY] = useState(0);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
   if (isNew) {
     return (
       <div className="bg-black text-white min-h-screen p-4 aphasia-style">
@@ -395,7 +418,15 @@ export default function VideoDetail() {
         >
           {isSummarizing ? 'Summarizing...' : 'Summarize'}
         </button>
-        <div className="sticky-video-wrapper sticky top-0 z-40 bg-black w-1/2 mx-auto">
+        <div
+          className="sticky-video-wrapper sticky top-0 z-40 bg-black mx-auto"
+          style={{
+            width: 'clamp(50%, calc(100% - 4rem), 75%)',
+            transition: 'width 0.3s ease',
+            transform: `scale(${1 - Math.min(scrollY / 1000, 0.33)})`,
+            transformOrigin: 'top center'
+          }}
+        >
           <video
             ref={videoRef}
             src={videoSrc || undefined}
@@ -426,7 +457,15 @@ export default function VideoDetail() {
       <div className="flex flex-col lg:flex-row gap-6">
         {/* Left column: video & summary */}
         <div className="flex flex-col flex-shrink-0 w-full lg:w-3/5">
-          <div className="sticky-video-wrapper sticky top-0 z-40 bg-black w-1/2 mx-auto mb-4">
+          <div
+            className="sticky-video-wrapper sticky top-0 z-40 bg-black mx-auto mb-4"
+            style={{
+              width: 'clamp(50%, calc(100% - 4rem), 75%)',
+              transition: 'width 0.3s ease',
+              transform: `scale(${1 - Math.min(scrollY / 1000, 0.33)})`,
+              transformOrigin: 'top center'
+            }}
+          >
             <video
               ref={videoRef}
               src={videoSrc || summary.videoUrl || undefined}
@@ -434,6 +473,19 @@ export default function VideoDetail() {
               className="w-full h-auto"
             />
           </div>
+          {summary && (
+            <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end text-center">
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
+                  `${typeof window !== 'undefined' ? window.location.origin : ''}/video/${id}?fullscreen=true`
+                )}`}
+                alt="QR Code for Mindmap"
+                className="rounded shadow"
+                title="Scan to view mindmap on your mobile"
+              />
+              <p className="text-sm text-gray-400 mt-1">Scan to view mindmap on your mobile</p>
+            </div>
+          )}
           <div className="bg-gray-800 p-6 rounded-lg mb-4">
             <h2 className="text-2xl font-semibold mb-2">Summary</h2>
             {summary.summaryJson ? (
@@ -506,6 +558,19 @@ export default function VideoDetail() {
                       <option value={0.5}>0.5x</option>
                       <option value={1}>1x</option>
                     </select>
+                    <select
+                      value={fontSize}
+                      onChange={(e) => setFontSize(Number(e.target.value))}
+                      className="px-2 py-1 bg-gray-700 text-white rounded"
+                      title="Mindmap Font Size"
+                    >
+                      <option value={20}>20px</option>
+                      <option value={24}>24px</option>
+                      <option value={26}>26px</option>
+                      <option value={30}>30px</option>
+                      <option value={34}>34px</option>
+                      <option value={36}>36px</option>
+                    </select>
                     <button
                       onClick={() => setMapFullscreen(false)}
                       className="text-white text-2xl"
@@ -514,34 +579,50 @@ export default function VideoDetail() {
                     </button>
                   </div>
                 </div>
-                  <div className="flex-grow relative">
-                    {narratedEmoji && (
-                      <div className="absolute top-4 left-4 text-7xl z-50">
-                        {narratedEmoji}
-                      </div>
-                    )}
-                    <div ref={visRef} className="h-full w-full" />
-                    {/* Narration text overlay for fullscreen mind map */}
-                    {!!currentNarrationText && (
-                      <div className="absolute bottom-20 left-4 right-4 bg-black bg-opacity-70 text-white text-sm font-mono p-3 rounded shadow aphasia-style">
-                        {currentNarrationText}
-                      </div>
-                    )}
-                  </div>
-                  {/* Volume slider for fullscreen mode, static position just below the rate select */}
-                  <div className="px-4 pb-4 pt-2 flex items-center justify-end space-x-2">
-                    <span role="img" aria-label="Volume" className="mr-2">🔊</span>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.01"
-                      value={narrationVolume}
-                      onChange={(e) => setNarrationVolume(Number(e.target.value))}
-                      className="w-32"
-                      title="Narration Volume"
-                    />
-                  </div>
+                <div className="flex-grow relative">
+                  {narratedEmoji && (
+                    <div className="absolute top-4 left-4 text-[10rem] z-50">
+                      {narratedEmoji}
+                    </div>
+                  )}
+                  <div ref={visRef} className="h-full w-full" />
+                  {summary && (
+                    <div className="absolute bottom-6 right-6 z-50 flex flex-col items-end text-center">
+                      <img
+                        src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(
+                          `${typeof window !== 'undefined' ? window.location.origin : ''}/video/${id}?fullscreen=true`
+                        )}`}
+                        alt="QR Code for Mindmap"
+                        className="rounded shadow"
+                        title="Scan to view mindmap on your mobile"
+                      />
+                      <p className="text-sm text-gray-400 mt-1">Scan to view mindmap on your mobile</p>
+                    </div>
+                  )}
+                  {/* Narration text overlay for fullscreen mind map */}
+                  {!!currentNarrationText && (
+                    <div
+                      className="absolute bottom-20 left-4 right-4 bg-black bg-opacity-70 text-white font-mono p-3 rounded shadow aphasia-style"
+                      style={{ fontSize: `${fontSize}px` }}
+                    >
+                      {currentNarrationText}
+                    </div>
+                  )}
+                </div>
+                {/* Volume slider for fullscreen mode, static position just below the rate select */}
+                <div className="px-4 pb-4 pt-2 flex items-center justify-end space-x-2">
+                  <span role="img" aria-label="Volume" className="mr-2">🔊</span>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    value={narrationVolume}
+                    onChange={(e) => setNarrationVolume(Number(e.target.value))}
+                    className="w-32"
+                    title="Narration Volume"
+                  />
+                </div>
               </div>
             ) : (
               <div className="flex-shrink-0 w-full lg:w-2/5" style={{ minHeight: "700px" }}>
@@ -602,7 +683,10 @@ export default function VideoDetail() {
                       <div ref={visRef} style={{ height: '600px', width: '100%' }} />
                       {/* Narration text display */}
                       {!!currentNarrationText && (
-                        <div className="mt-4 p-2 bg-black bg-opacity-70 rounded text-white text-sm font-mono aphasia-style">
+                        <div
+                          className="mt-4 p-2 bg-black bg-opacity-70 rounded text-white font-mono aphasia-style"
+                          style={{ fontSize: `${fontSize}px` }}
+                        >
                           {currentNarrationText}
                         </div>
                       )}
