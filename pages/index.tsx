@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useRef, useState, useEffect } from 'react';
 import { useVideoSummarizer } from '../hooks/useVideoSummarizer';
 import Link from 'next/link';
+import { FLASK_BACKEND_DOWNLOAD_YOUTUBE } from '../lib/config';
 
 export default function Home() {
   const { summaries, summarize } = useVideoSummarizer();
@@ -107,6 +108,49 @@ export default function Home() {
             <h3 className="text-lg font-medium">{isRecording ? 'Stop' : 'Record'}</h3>
             <p className="text-sm text-gray-400">{isRecording ? 'Stop Recording' : 'Record Video to simplify'}</p>
           </div>
+          {/* YouTube URL input card */}
+          {/*
+          <div className="w-96 flex flex-col items-center bg-gray-800 p-6 rounded-lg aphasia-style">
+            <span className="text-3xl mb-2">📺</span>
+            <h3 className="text-lg font-medium mb-2">YouTube URL</h3>
+            <input
+              type="text"
+              placeholder="Paste YouTube URL"
+              className="text-black w-full p-2 rounded mb-2"
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter') {
+                  const input = (e.target as HTMLInputElement).value;
+                  const isValidYoutubeUrl = /^(https?\:\/\/)?(www\.youtube\.com|youtu\.?be)\/.+$/.test(input);
+                  if (!isValidYoutubeUrl) {
+                    alert('Invalid YouTube URL');
+                    return;
+                  }
+
+                  try {
+                    const res = await fetch(FLASK_BACKEND_DOWNLOAD_YOUTUBE, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ url: input })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.videoUrl && data.title && data.id) {
+                      router.push({
+                        pathname: `/video/${data.id}`,
+                        query: { videoUrl: data.videoUrl, title: data.title }
+                      });
+                    } else {
+                      alert('Failed to process video');
+                    }
+                  } catch (err) {
+                    console.error(err);
+                    alert('Error processing YouTube URL');
+                  }
+                }
+              }}
+            />
+            <p className="text-sm text-gray-400 text-center">Press Enter to submit. Only first 7 minutes will be used.</p>
+          </div>
+          */}
         </div>
         {showPreview && stream && (
           <div className="fixed top-20 right-4 bg-black border border-white p-2 rounded z-50">
