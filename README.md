@@ -46,7 +46,7 @@ Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
 
 ##  Backend
 
-See the [ReMindMap Backend Repository](https://github.com/yourusername/video-summarizer-backend) for API details.
+See the [ReMindMap Backend Repository](https://github.com/Dwitee/youtube-summary-backend-gcp) for API details.
 
 ##  License
 
