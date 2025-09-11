@@ -1,5 +1,5 @@
 // next.config.js
-const EXTERNAL_IP = "35.235.84.114";
+const EXTERNAL_IP = "35.236.62.60";
 const BASE_URL = `http://${EXTERNAL_IP}:8080`;
 
 /** @type {import('next').NextConfig} */
